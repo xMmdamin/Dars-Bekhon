@@ -423,6 +423,65 @@ body[data-density="compact"] .stat{padding:9px}
 @media(max-width:900px){.periodic-table{grid-auto-rows:48px}.pt-sym{font-size:.85rem}.pt-name{font-size:.5rem}.pt-z{font-size:.46rem}}
 @media(max-width:600px){.periodic-table{grid-template-columns:repeat(18, 46px);grid-auto-rows:42px}.pt-sym{font-size:.75rem}.pt-name{display:none}.toolbox-tab{padding:8px 12px;font-size:.78rem}}
 
+/* ============ NOISE PLAYER ============ */
+.noise-types{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}
+.noise-type-btn{display:flex;flex-direction:column;gap:4px;align-items:flex-start;padding:14px;border-radius:14px;border:1px solid var(--border);background:rgba(125,145,190,.06);text-align:right;transition:.16s}
+.noise-type-btn b{font-size:.9rem}
+.noise-type-btn span{font-size:.72rem;color:var(--muted)}
+.noise-type-btn.active{border-color:rgba(110,231,255,.5);background:linear-gradient(135deg,rgba(110,231,255,.15),rgba(155,140,255,.15))}
+.noise-player{display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding:14px;border-radius:14px;border:1px solid var(--border);background:rgba(125,145,190,.05)}
+.noise-toggle{min-width:110px;font-weight:800}
+.noise-toggle.active-noise{background:linear-gradient(135deg,rgba(83,230,166,.25),rgba(110,231,255,.25));border-color:rgba(83,230,166,.4)}
+.noise-volume{display:flex;flex-direction:column;gap:4px;flex:1;min-width:140px}
+.noise-volume label{margin:0}
+@media(max-width:600px){.noise-types{grid-template-columns:1fr}}
+
+/* ============ QUICK NOTES ============ */
+.note-add{display:flex;flex-direction:column;gap:10px;margin-bottom:16px}
+.note-add-row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.note-add-row select{flex:1;min-width:160px}
+.note-add-row .btn{flex:none}
+.notes-list{display:grid;gap:10px}
+.note-card{padding:12px 14px;border-radius:14px;border:1px solid var(--border);background:rgba(125,145,190,.06)}
+.note-card-top{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px}
+.note-card-text{font-size:.88rem;line-height:1.7;white-space:pre-wrap;word-break:break-word}
+.note-card-actions{display:flex;gap:8px;margin-top:10px}
+
+/* ============ FORMULA SHEET ============ */
+#formulaSearch{margin-bottom:16px}
+.formula-subject{margin-bottom:18px}
+.formula-subject h3{margin:0 0 10px;font-size:1rem}
+.formula-group{margin-bottom:10px;padding:10px 12px;border-radius:12px;background:rgba(125,145,190,.05);border:1px solid var(--border)}
+.formula-group-title{font-weight:800;font-size:.8rem;color:var(--accent);margin-bottom:8px}
+.formula-item{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:7px 0;border-top:1px dashed var(--border);flex-wrap:wrap}
+.formula-item:first-of-type{border-top:none}
+.formula-item span{color:var(--muted);font-size:.78rem;flex:1;min-width:120px}
+.formula-item b{font-family:'Courier New',monospace;direction:ltr;text-align:left;font-size:.85rem;font-weight:800}
+
+/* ============ CALCULATOR + UNIT CONVERTER ============ */
+.calc-subtabs{display:flex;gap:8px;margin-bottom:14px}
+.calc-subtab{padding:9px 16px;border-radius:11px;border:1px solid var(--border);background:rgba(125,145,190,.06);color:var(--text);font-weight:800;font-size:.85rem;cursor:pointer}
+.calc-subtab.active{background:linear-gradient(135deg,rgba(110,231,255,.25),rgba(155,140,255,.25));border-color:rgba(110,231,255,.5)}
+.calc-panel{display:none}
+.calc-panel.active{display:block}
+.calc-screen{font-size:1.5rem;font-weight:800;text-align:left;direction:ltr;padding:16px;margin-bottom:10px;border-radius:14px;background:var(--input-bg);letter-spacing:.5px}
+.calc-meta{display:flex;gap:8px;margin-bottom:10px}
+.calc-deg-btn{padding:6px 12px;border-radius:9px;border:1px solid var(--border);background:rgba(125,145,190,.06);color:var(--muted);font-size:.72rem;font-weight:800;cursor:pointer}
+.calc-deg-btn.active{color:var(--accent);border-color:rgba(110,231,255,.5);background:rgba(110,231,255,.1)}
+.calc-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.calc-btn{padding:16px 6px;border-radius:12px;border:1px solid var(--border);background:rgba(125,145,190,.06);color:var(--text);font-size:1rem;font-weight:700;cursor:pointer;transition:.12s}
+.calc-btn:hover{background:rgba(125,145,190,.14);transform:translateY(-1px)}
+.calc-btn.calc-op{background:linear-gradient(135deg,rgba(110,231,255,.18),rgba(155,140,255,.18));font-weight:800;color:var(--accent)}
+.conv-cats{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}
+.conv-cat-btn{padding:8px 14px;border-radius:10px;border:1px solid var(--border);background:rgba(125,145,190,.06);color:var(--text);font-size:.8rem;font-weight:700;cursor:pointer}
+.conv-cat-btn.active{background:linear-gradient(135deg,rgba(110,231,255,.25),rgba(155,140,255,.25));border-color:rgba(110,231,255,.5)}
+.conv-row{display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap}
+.conv-row .field-mini{flex:1;min-width:100px;display:flex;flex-direction:column;gap:4px}
+.conv-row .field-mini label{margin:0}
+.conv-row select{flex:1;min-width:150px}
+.conv-arrow{font-weight:900;font-size:1.2rem;color:var(--muted);padding-bottom:10px}
+@media(max-width:600px){.calc-grid{gap:6px}.calc-btn{padding:14px 4px;font-size:.9rem}.conv-row{flex-direction:column;align-items:stretch}.conv-arrow{display:none}}
+
 /* ============ OTHER (quests, boss, leitner, classes, shop, skill, status, ach, tasks) ============ */
 .quest-board-v7{display:grid;grid-template-columns:minmax(0,1fr) 280px;gap:14px;align-items:start}
 .quest-board-hero{grid-column:1/-1;display:flex;justify-content:space-between;align-items:center;gap:18px;padding:20px 22px}
@@ -1310,3 +1369,56 @@ body[data-density="compact"] .stat{padding:9px}
 @media(max-width:900px){.timer-v2-grid{grid-template-columns:1fr}.timer-v2-clock{min-height:auto}.timer-v2-controls{grid-template-columns:1.3fr .8fr .9fr}}
 @media(max-width:650px){.timer-v2-topbar{align-items:flex-start;flex-direction:column}.timer-v2-topbar .timer-v2-status{align-self:stretch;justify-content:center}.timer-v2-clock,.timer-v2-config{padding:17px}.timer-display{font-size:4rem}.timer-v2-controls{grid-template-columns:1fr 1fr}.timer-v2-controls .timer-main{grid-column:1/-1}.timer-v2-presets{grid-template-columns:1fr 1fr}.timer-v2-meta{grid-template-columns:1fr 1fr}}
 
+
+/* ===================== YPT-inspired additions: heatmap, ranking, daily planner, pomodoro ===================== */
+
+/* --- Study heatmap --- */
+.heatmap-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:10px 0 14px}
+.heatmap-scroll{overflow-x:auto;padding-bottom:4px}
+.heatmap-grid{display:flex;gap:6px;min-width:min-content}
+.heatmap-daylabels{display:flex;flex-direction:column;gap:3px;justify-content:flex-start;padding-top:0}
+.heatmap-daylabels span{width:11px;height:11px;font-size:.55rem;color:var(--muted);line-height:11px;text-align:center}
+.heatmap-weeks{display:flex;flex-direction:row-reverse;gap:3px}
+.heatmap-week{display:flex;flex-direction:column;gap:3px}
+.heatmap-cell{width:11px;height:11px;border-radius:3px;background:rgba(125,145,190,.10);display:inline-block;box-sizing:border-box}
+.heatmap-cell.future{background:transparent}
+.heatmap-cell.lvl0{background:rgba(125,145,190,.10)}
+.heatmap-cell.lvl1{background:color-mix(in srgb, var(--accent) 28%, transparent)}
+.heatmap-cell.lvl2{background:color-mix(in srgb, var(--accent) 52%, transparent)}
+.heatmap-cell.lvl3{background:color-mix(in srgb, var(--accent) 76%, transparent)}
+.heatmap-cell.lvl4{background:linear-gradient(135deg,var(--accent),var(--accent2))}
+.heatmap-legend{display:flex;align-items:center;gap:5px;margin-top:10px;color:var(--muted);font-size:.68rem}
+.heatmap-legend .heatmap-cell{width:11px;height:11px}
+
+/* --- Subject ranking / leaderboard --- */
+.ranking-range-tabs{display:flex;gap:5px;flex-wrap:wrap}
+.ranking-range-btn{padding:5px 9px;font-size:.68rem}
+.ranking-range-btn.active{background:linear-gradient(135deg,rgba(110,231,255,.25),rgba(155,140,255,.25));border-color:rgba(110,231,255,.35);font-weight:800}
+.rank-row{display:flex;align-items:center;gap:9px;padding:9px 0;border-bottom:1px solid var(--border)}
+.rank-row:last-child{border-bottom:none}
+.rank-medal{width:22px;text-align:center;font-size:.95rem}
+.rank-icon{font-size:1.05rem}
+.rank-main{flex:1;min-width:0}
+.rank-top{display:flex;justify-content:space-between;gap:8px;font-size:.82rem;margin-bottom:5px}
+.rank-top b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rank-main .progress{margin:3px 0}
+
+/* --- Daily 10-minute planner --- */
+.plan-subject-list{display:flex;flex-direction:column;gap:6px;max-height:260px;overflow:auto;margin-top:6px;padding:4px;border:1px solid var(--border);border-radius:11px;background:rgba(125,145,190,.04)}
+.plan-subject-chip{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:9px;cursor:pointer;font-size:.85rem}
+.plan-subject-chip:hover{background:var(--glass-bg-hover)}
+.plan-subject-chip input{width:auto;accent-color:var(--accent)}
+
+/* --- Pomodoro / focus commitment --- */
+.timer-v2-pomodoro{margin-top:16px;padding:20px}
+.pomodoro-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap}
+.pomodoro-switch{display:flex;align-items:center;gap:7px;padding:8px 12px;border:1px solid var(--glass-border);border-radius:99px;background:var(--glass-bg);font-size:.75rem;font-weight:800;white-space:nowrap;cursor:pointer}
+.pomodoro-switch input{width:auto;accent-color:var(--accent)}
+.pomodoro-stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:14px 0}
+.commit-title{font-size:.78rem;color:var(--muted);margin-bottom:8px}
+.commit-chips{display:flex;flex-wrap:wrap;gap:7px}
+.commit-chip{border:1px solid var(--glass-border);background:var(--glass-bg);color:var(--text);padding:7px 11px;border-radius:99px;font-size:.75rem;transition:.15s}
+.commit-chip.active{background:linear-gradient(135deg,rgba(83,230,166,.28),rgba(110,231,255,.2));border-color:rgba(83,230,166,.45);font-weight:800}
+.pomodoro-break-box{margin-top:14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 14px;border-radius:12px;background:rgba(255,209,102,.12);border:1px solid rgba(255,209,102,.3);font-weight:800}
+.pomodoro-break-box b{font-variant-numeric:tabular-nums;font-size:1.1rem;color:var(--warn)}
+@media(max-width:600px){.pomodoro-stats{grid-template-columns:1fr 1fr}}

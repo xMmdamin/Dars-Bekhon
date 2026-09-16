@@ -585,7 +585,7 @@ moodEmoji:"📚",moodLabel:"مطالعه‌گر",customMoods:null,
     subjects,episodes:[],quests:[],bosses:[],customRewards:[],achievements:{},history:{},
     lastQuality:"—",leitner:{cards:[]},classes:[],checklists:{},
     checklistVersion:10,customTasks:[],tasksDone:{},taskOverrides:{},hiddenTasks:[],routines:[],routineChecks:{},mistakes:[],smartPlan:null,
-    mockExams:[],routineNotifiedLog:null
+    mockExams:[],routineNotifiedLog:null,quickNotes:[]
   };
 }
 let state=JSON.parse(localStorage.getItem(stateKey)||"null")||freshState();
@@ -607,6 +607,7 @@ if(!state.achievementUnlocked||typeof state.achievementUnlocked!=="object")state
 if(!state.routineChecks||typeof state.routineChecks!=="object")state.routineChecks={};
 if(!Array.isArray(state.mockExams))state.mockExams=[];
 if(!Array.isArray(state.mistakes))state.mistakes=[];
+if(!Array.isArray(state.quickNotes))state.quickNotes=[];
 Object.keys(SUBJECTS).forEach(k=>{if(!state.subjects[k])state.subjects[k]={xp:0,level:1,knowledge:0,accuracy:0,speed:0,retention:0,consistency:0,episodes:0,tests:0,correct:0,wrong:0,blank:0,topics:{}}});
 
 window.SHOP=[
@@ -3838,7 +3839,7 @@ window.showPeriodicDetail=function(z){
 window.switchToolboxTab=function(tab){
   document.querySelectorAll(".toolbox-tab").forEach(b=>b.classList.remove("active"));
   document.querySelectorAll(".tool-panel").forEach(p=>p.classList.remove("active"));
-  const map={leitner:"toolLeitner",timer:"toolTimer",periodic:"toolPeriodic"};
+  const map={leitner:"toolLeitner",timer:"toolTimer",periodic:"toolPeriodic",noise:"toolNoise",notes:"toolNotes",formulas:"toolFormulas",calc:"toolCalc"};
   const btn=[...document.querySelectorAll(".toolbox-tab")].find(b=>b.getAttribute("onclick").includes(`'${tab}'`));
   const panel=document.getElementById(map[tab]);
   if(btn)btn.classList.add("active");
@@ -3846,6 +3847,412 @@ window.switchToolboxTab=function(tab){
   if(tab==="leitner")renderLeitner();
   if(tab==="timer"){populateStudyTimerSubjects();updateOfflineStudyTimer();}
   if(tab==="periodic")buildPeriodicTable();
+  if(tab==="noise")renderNoiseTypes();
+  if(tab==="notes"){populateQuickNoteSubjects();renderQuickNotes();}
+  if(tab==="formulas")renderFormulaSheet("");
+  if(tab==="calc"){buildCalcGrid();buildUnitConverter();}
+};
+
+/* ===================== NOISE / FOCUS SOUND ===================== */
+let noiseCtx=null,noiseSourceNode=null,noiseGainNode=null,noisePlaying=false,noiseCurrentType="white",noiseAutoStopTimer=null;
+const NOISE_TYPES=[
+  {id:"white",label:"نویز سفید",desc:"صدای یکنواخت پرطیف، برای پوشاندن صداهای اطراف"},
+  {id:"pink",label:"نویز صورتی",desc:"نرم‌تر از سفید، بیشتر روی فرکانس‌های پایین"},
+  {id:"brown",label:"نویز قهوه‌ای",desc:"عمیق و آرام‌بخش‌تر، شبیه صدای رعد دور"}
+];
+function renderNoiseTypes(){
+  const el=document.getElementById("noiseTypes");if(!el)return;
+  el.innerHTML=NOISE_TYPES.map(n=>`<button type="button" class="noise-type-btn${n.id===noiseCurrentType?" active":""}" onclick="setNoiseType('${n.id}')">
+    <b>${esc(n.label)}</b><span>${esc(n.desc)}</span>
+  </button>`).join("");
+}
+function ensureNoiseAudio(){
+  if(noiseCtx)return;
+  const AC=window.AudioContext||window.webkitAudioContext;
+  if(!AC)return;
+  noiseCtx=new AC();
+  noiseGainNode=noiseCtx.createGain();
+  const slider=document.getElementById("noiseVolume");
+  noiseGainNode.gain.value=((slider?Number(slider.value):55)/100)*0.35;
+  noiseGainNode.connect(noiseCtx.destination);
+}
+function buildNoiseBuffer(type){
+  const bufferSize=2*noiseCtx.sampleRate;
+  const buffer=noiseCtx.createBuffer(1,bufferSize,noiseCtx.sampleRate);
+  const data=buffer.getChannelData(0);
+  if(type==="white"){
+    for(let i=0;i<bufferSize;i++)data[i]=Math.random()*2-1;
+  }else if(type==="pink"){
+    let b0=0,b1=0,b2=0,b3=0,b4=0,b5=0,b6=0;
+    for(let i=0;i<bufferSize;i++){
+      const w=Math.random()*2-1;
+      b0=0.99886*b0+w*0.0555179;b1=0.99332*b1+w*0.0750759;b2=0.96900*b2+w*0.1538520;
+      b3=0.86650*b3+w*0.3104856;b4=0.55000*b4+w*0.5329522;b5=-0.7616*b5-w*0.0168980;
+      const out=b0+b1+b2+b3+b4+b5+b6+w*0.5362;b6=w*0.115926;
+      data[i]=out*0.11;
+    }
+  }else{
+    let last=0;
+    for(let i=0;i<bufferSize;i++){
+      const w=Math.random()*2-1;
+      last=(last+0.02*w)/1.02;
+      data[i]=last*3.5;
+    }
+  }
+  return buffer;
+}
+function startNoiseSource(){
+  ensureNoiseAudio();
+  if(!noiseCtx)return;
+  if(noiseSourceNode){try{noiseSourceNode.stop();}catch(e){}noiseSourceNode.disconnect();}
+  noiseSourceNode=noiseCtx.createBufferSource();
+  noiseSourceNode.buffer=buildNoiseBuffer(noiseCurrentType);
+  noiseSourceNode.loop=true;
+  noiseSourceNode.connect(noiseGainNode);
+  noiseSourceNode.start(0);
+}
+window.setNoiseType=function(type){
+  noiseCurrentType=type;
+  renderNoiseTypes();
+  if(noisePlaying)startNoiseSource();
+};
+window.toggleNoisePlayback=function(){
+  const btn=document.getElementById("noiseToggleBtn");
+  const status=document.getElementById("noiseStatus");
+  if(!noisePlaying){
+    ensureNoiseAudio();
+    if(!noiseCtx){if(status)status.textContent="مرورگر شما از پخش صدا پشتیبانی نمی‌کند.";return;}
+    if(noiseCtx.state==="suspended")noiseCtx.resume();
+    startNoiseSource();
+    noisePlaying=true;
+    if(btn){btn.textContent="⏸ توقف";btn.classList.add("active-noise")}
+    if(status)status.textContent=`در حال پخش: ${esc((NOISE_TYPES.find(n=>n.id===noiseCurrentType)||{}).label||"")}`;
+  }else{
+    stopNoisePlayback();
+  }
+};
+function stopNoisePlayback(){
+  if(noiseSourceNode){try{noiseSourceNode.stop();}catch(e){}noiseSourceNode.disconnect();noiseSourceNode=null;}
+  noisePlaying=false;
+  const btn=document.getElementById("noiseToggleBtn");
+  const status=document.getElementById("noiseStatus");
+  if(btn){btn.textContent="▶ پخش";btn.classList.remove("active-noise")}
+  if(status)status.textContent="در حال حاضر متوقف است.";
+  if(noiseAutoStopTimer){clearTimeout(noiseAutoStopTimer);noiseAutoStopTimer=null;}
+}
+window.setNoiseVolume=function(v){
+  ensureNoiseAudio();
+  if(noiseGainNode)noiseGainNode.gain.value=(Number(v)/100)*0.35;
+};
+window.setNoiseAutoStop=function(mins){
+  if(noiseAutoStopTimer){clearTimeout(noiseAutoStopTimer);noiseAutoStopTimer=null;}
+  const m=Number(mins)||0;
+  if(m>0)noiseAutoStopTimer=setTimeout(()=>{stopNoisePlayback();},m*60*1000);
+};
+
+/* ===================== QUICK NOTES ===================== */
+function populateQuickNoteSubjects(){
+  const sel=document.getElementById("quickNoteSubject");if(!sel)return;
+  const cur=sel.value;
+  const key=state.settings.selectedCurriculum||"";
+  const keys=key?curriculumSubjectKeys(key):Object.keys(SUBJECTS);
+  sel.innerHTML='<option value="">— بدون دسته —</option>'+keys.map(k=>`<option value="${k}">${esc(subjectDisplayName(k,key))}</option>`).join("");
+  if(keys.includes(cur))sel.value=cur;
+}
+window.addQuickNote=function(){
+  const ta=document.getElementById("quickNoteText");
+  const sel=document.getElementById("quickNoteSubject");
+  const text=(ta&&ta.value||"").trim();
+  if(!text)return;
+  state.quickNotes.unshift({id:"n"+Date.now()+Math.random().toString(36).slice(2,6),text:text.slice(0,500),subject:(sel&&sel.value)||"",createdAt:Date.now()});
+  if(state.quickNotes.length>300)state.quickNotes.length=300;
+  save();
+  if(ta)ta.value="";
+  renderQuickNotes();
+  showToast("یادداشت ثبت شد.");
+};
+window.deleteQuickNote=function(id){
+  state.quickNotes=state.quickNotes.filter(n=>n.id!==id);
+  save();
+  renderQuickNotes();
+};
+window.copyQuickNote=function(id){
+  const n=state.quickNotes.find(x=>x.id===id);if(!n)return;
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+    navigator.clipboard.writeText(n.text).then(()=>showToast("کپی شد.")).catch(()=>{});
+  }
+};
+function renderQuickNotes(){
+  const el=document.getElementById("quickNotesList");if(!el)return;
+  const key=state.settings.selectedCurriculum||"";
+  if(!state.quickNotes.length){el.innerHTML='<div class="empty">هنوز یادداشتی ثبت نشده.</div>';return}
+  el.innerHTML=state.quickNotes.map(n=>{
+    const subj=n.subject&&SUBJECTS[n.subject]?`<span class="pill">${esc(subjectDisplayName(n.subject,key))}</span>`:"";
+    const d=new Date(n.createdAt);
+    const when=Number.isFinite(n.createdAt)?d.toLocaleDateString("fa-IR")+" — "+d.toLocaleTimeString("fa-IR",{hour:"2-digit",minute:"2-digit"}):"";
+    return `<div class="note-card">
+      <div class="note-card-top">${subj}<span class="muted small">${when}</span></div>
+      <div class="note-card-text">${esc(n.text)}</div>
+      <div class="note-card-actions">
+        <button class="btn" onclick="copyQuickNote('${n.id}')">📋 کپی</button>
+        <button class="btn danger" onclick="deleteQuickNote('${n.id}')">🗑 حذف</button>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+/* ===================== FORMULA SHEET ===================== */
+const FORMULA_SHEET=[
+  {subject:"ریاضی",icon:"📐",groups:[
+    {title:"جبر و معادلات",items:[
+      {t:"معادله درجه دوم",f:"x = (−b ± √(b²−4ac)) / 2a"},
+      {t:"تشخیص‌دهنده (دلتا)",f:"Δ = b² − 4ac"}
+    ]},
+    {title:"مثلثات",items:[
+      {t:"اتحاد اصلی",f:"sin²θ + cos²θ = 1"},
+      {t:"تانژانت",f:"tan θ = sin θ / cos θ"},
+      {t:"فرمول جمع سینوس",f:"sin(a±b) = sin a·cos b ± cos a·sin b"},
+      {t:"فرمول جمع کسینوس",f:"cos(a±b) = cos a·cos b ∓ sin a·sin b"}
+    ]},
+    {title:"مشتق",items:[
+      {t:"توان",f:"(xⁿ)′ = n·xⁿ⁻¹"},
+      {t:"سینوس و کسینوس",f:"(sin x)′ = cos x  ،  (cos x)′ = −sin x"},
+      {t:"نمایی و لگاریتم طبیعی",f:"(eˣ)′ = eˣ  ،  (ln x)′ = 1/x"},
+      {t:"قاعده ضرب",f:"(f·g)′ = f′g + fg′"},
+      {t:"قاعده زنجیره‌ای",f:"(f(g(x)))′ = f′(g(x))·g′(x)"}
+    ]},
+    {title:"انتگرال",items:[
+      {t:"توان",f:"∫xⁿ dx = xⁿ⁺¹/(n+1) + C"},
+      {t:"1/x",f:"∫(1/x) dx = ln|x| + C"},
+      {t:"نمایی",f:"∫eˣ dx = eˣ + C"},
+      {t:"مثلثاتی",f:"∫sin x dx = −cos x + C  ،  ∫cos x dx = sin x + C"}
+    ]},
+    {title:"هندسه",items:[
+      {t:"مساحت و محیط دایره",f:"A = πr²  ،  C = 2πr"},
+      {t:"قضیه فیثاغورس",f:"a² + b² = c²"},
+      {t:"حجم و سطح کره",f:"V = (4/3)πr³  ،  S = 4πr²"},
+      {t:"حجم استوانه",f:"V = πr²h"},
+      {t:"حجم مخروط",f:"V = (1/3)πr²h"}
+    ]},
+    {title:"آمار و احتمال",items:[
+      {t:"میانگین",f:"x̄ = Σx / n"},
+      {t:"واریانس",f:"σ² = Σ(x−x̄)² / n"},
+      {t:"احتمال کلاسیک",f:"P(A) = حالت‌های مطلوب / کل حالت‌ها"},
+      {t:"اجتماع دو پیشامد",f:"P(A∪B) = P(A) + P(B) − P(A∩B)"}
+    ]}
+  ]},
+  {subject:"فیزیک",icon:"⚛️",groups:[
+    {title:"سینماتیک",items:[
+      {t:"سرعت بر حسب زمان",f:"v = v₀ + at"},
+      {t:"جابه‌جایی",f:"x = x₀ + v₀t + ½at²"},
+      {t:"رابطه سرعت-جابه‌جایی",f:"v² = v₀² + 2aΔx"}
+    ]},
+    {title:"دینامیک",items:[
+      {t:"قانون دوم نیوتن",f:"F = m·a"},
+      {t:"وزن",f:"W = m·g"},
+      {t:"نیروی اصطکاک",f:"f = μN"}
+    ]},
+    {title:"کار و انرژی",items:[
+      {t:"کار",f:"W = F·d·cosθ"},
+      {t:"انرژی جنبشی",f:"KE = ½mv²"},
+      {t:"انرژی پتانسیل گرانشی",f:"PE = mgh"},
+      {t:"توان",f:"P = W / t"}
+    ]},
+    {title:"الکتریسیته",items:[
+      {t:"قانون اهم",f:"V = IR"},
+      {t:"توان الکتریکی",f:"P = VI = I²R = V²/R"},
+      {t:"مقاومت‌های سری",f:"R = R₁ + R₂ + ..."},
+      {t:"مقاومت‌های موازی",f:"1/R = 1/R₁ + 1/R₂ + ..."}
+    ]},
+    {title:"موج",items:[
+      {t:"رابطه سرعت موج",f:"v = f·λ"},
+      {t:"دوره تناوب",f:"T = 1/f"}
+    ]}
+  ]},
+  {subject:"شیمی",icon:"🧪",groups:[
+    {title:"مول و جرم",items:[
+      {t:"تعداد مول",f:"n = m / M"},
+      {t:"تعداد ذرات",f:"N = n × Nₐ   (Nₐ = 6.022×10²³)"}
+    ]},
+    {title:"غلظت",items:[
+      {t:"غلظت مولار",f:"M = n / V(لیتر)"},
+      {t:"درصد جرمی",f:"%w/w = (جرم حل‌شونده / جرم محلول) × 100"}
+    ]},
+    {title:"گازها",items:[
+      {t:"معادله گاز کامل",f:"PV = nRT"},
+      {t:"قانون بویل (دمای ثابت)",f:"P₁V₁ = P₂V₂"},
+      {t:"قانون شارل (فشار ثابت)",f:"V₁/T₁ = V₂/T₂"}
+    ]},
+    {title:"استوکیومتری",items:[
+      {t:"پایستگی جرم",f:"مجموع جرم واکنش‌دهنده‌ها = مجموع جرم فرآورده‌ها"},
+      {t:"بازده درصدی",f:"بازده = (مقدار واقعی / مقدار نظری) × 100"}
+    ]}
+  ]}
+];
+window.renderFormulaSheet=function(query){
+  const el=document.getElementById("formulaSheetList");if(!el)return;
+  const q=(query||"").trim().toLowerCase();
+  let html="";
+  FORMULA_SHEET.forEach(subj=>{
+    const groups=subj.groups.map(g=>{
+      const items=g.items.filter(it=>!q||it.t.toLowerCase().includes(q)||it.f.toLowerCase().includes(q)||subj.subject.includes(q)||g.title.includes(q));
+      if(!items.length)return "";
+      return `<div class="formula-group">
+        <div class="formula-group-title">${esc(g.title)}</div>
+        ${items.map(it=>`<div class="formula-item"><span>${esc(it.t)}</span><b dir="ltr">${esc(it.f)}</b></div>`).join("")}
+      </div>`;
+    }).join("");
+    if(groups)html+=`<div class="formula-subject"><h3>${subj.icon} ${esc(subj.subject)}</h3>${groups}</div>`;
+  });
+  el.innerHTML=html||'<div class="empty">فرمولی با این جست‌وجو پیدا نشد.</div>';
+};
+
+/* ===================== SCIENTIFIC CALCULATOR ===================== */
+let calcExprValue="",calcAngleMode="deg";
+const CALC_BUTTONS=[
+  ["AC","DEL","(",")"],
+  ["sin","cos","tan","√"],
+  ["log","ln","π","e"],
+  ["7","8","9","÷"],
+  ["4","5","6","×"],
+  ["1","2","3","−"],
+  ["0",".","%","+"],
+  ["x²","xʸ","=","="]
+];
+function buildCalcGrid(){
+  const grid=document.getElementById("calcGrid");if(!grid||grid.dataset.built==="1")return;
+  let html="";
+  CALC_BUTTONS.forEach((row,ri)=>{
+    row.forEach((b,ci)=>{
+      if(ri===7&&ci===3)return;
+      const span=(ri===7&&ci===2)?' style="grid-column:span 2"':"";
+      const cls=["AC","DEL"].includes(b)?"calc-btn calc-op":(["÷","×","−","+","="].includes(b)?"calc-btn calc-op":"calc-btn");
+      html+=`<button type="button" class="${cls}"${span} onclick="calcPress('${b.replace("'","\\'")}')">${b}</button>`;
+    });
+  });
+  grid.innerHTML=html;
+  grid.dataset.built="1";
+}
+window.setCalcAngleMode=function(mode){
+  calcAngleMode=mode;
+  const d=document.getElementById("calcDegBtn"),r=document.getElementById("calcRadBtn");
+  if(d)d.classList.toggle("active",mode==="deg");
+  if(r)r.classList.toggle("active",mode==="rad");
+};
+function calcUpdateScreen(){
+  const s=document.getElementById("calcExpr");if(!s)return;
+  s.value=calcExprValue||"0";
+}
+window.calcPress=function(b){
+  if(b==="AC"){calcExprValue="";calcUpdateScreen();return}
+  if(b==="DEL"){calcExprValue=calcExprValue.slice(0,-1);calcUpdateScreen();return}
+  if(b==="="){calcEvaluate();return}
+  if(b==="x²"){calcExprValue+="^2";calcUpdateScreen();return}
+  if(b==="xʸ"){calcExprValue+="^";calcUpdateScreen();return}
+  if(b==="√"){calcExprValue+="√(";calcUpdateScreen();return}
+  if(["sin","cos","tan","log","ln"].includes(b)){calcExprValue+=b+"(";calcUpdateScreen();return}
+  if(b==="π"){calcExprValue+="π";calcUpdateScreen();return}
+  if(b==="e"){calcExprValue+="e";calcUpdateScreen();return}
+  if(b==="÷"){calcExprValue+="/";calcUpdateScreen();return}
+  if(b==="×"){calcExprValue+="*";calcUpdateScreen();return}
+  if(b==="−"){calcExprValue+="-";calcUpdateScreen();return}
+  calcExprValue+=b;
+  calcUpdateScreen();
+};
+function calcEvaluate(){
+  try{
+    let expr=calcExprValue;
+    if(!expr){return}
+    if(!/^[0-9+\-*/^%().√πe a-z]*$/i.test(expr))throw new Error("bad chars");
+    const openCount=(expr.match(/\(/g)||[]).length,closeCount=(expr.match(/\)/g)||[]).length;
+    if(openCount>closeCount)expr+=")".repeat(openCount-closeCount);
+    // ضرب ضمنی روی عبارت خام (قبل از تبدیل نام توابع)، تا با رقم داخل نام تابع مثل log10 تداخل نکند
+    expr=expr.replace(/(\d)(\()/g,"$1*$2").replace(/(\))(\d)/g,"$1*$2").replace(/(\))(\()/g,"$1*$2");
+    expr=expr.replace(/√\(/g,"Math.sqrt(");
+    expr=expr.replace(/sin\(/g,"__sin(").replace(/cos\(/g,"__cos(").replace(/tan\(/g,"__tan(");
+    expr=expr.replace(/log\(/g,"Math.log10(").replace(/ln\(/g,"Math.log(");
+    expr=expr.replace(/π/g,"Math.PI").replace(/(?<![a-zA-Z])e(?![a-zA-Z(])/g,"Math.E");
+    expr=expr.replace(/\^/g,"**");
+    expr=expr.replace(/(\d)(Math\.)/g,"$1*$2");
+    const toRad=x=>calcAngleMode==="deg"?x*Math.PI/180:x;
+    const __sin=x=>Math.sin(toRad(x)),__cos=x=>Math.cos(toRad(x)),__tan=x=>Math.tan(toRad(x));
+    // eslint-disable-next-line no-new-func
+    const val=Function("Math","__sin","__cos","__tan",`"use strict";return (${expr});`)(Math,__sin,__cos,__tan);
+    if(!Number.isFinite(val))throw new Error("invalid");
+    calcExprValue=String(Math.round(val*1e10)/1e10);
+    calcUpdateScreen();
+  }catch(e){
+    const s=document.getElementById("calcExpr");if(s)s.value="خطا در عبارت";
+    calcExprValue="";
+  }
+}
+
+/* ===================== UNIT CONVERTER ===================== */
+const UNIT_CATEGORIES=[
+  {id:"length",label:"طول",base:"m",units:{"میلی‌متر (mm)":0.001,"سانتی‌متر (cm)":0.01,"متر (m)":1,"کیلومتر (km)":1000,"اینچ (in)":0.0254,"فوت (ft)":0.3048,"مایل (mi)":1609.34}},
+  {id:"mass",label:"جرم",base:"kg",units:{"میلی‌گرم (mg)":0.000001,"گرم (g)":0.001,"کیلوگرم (kg)":1,"تن (t)":1000,"پوند (lb)":0.453592,"اونس (oz)":0.0283495}},
+  {id:"volume",label:"حجم",base:"l",units:{"میلی‌لیتر (ml)":0.001,"لیتر (l)":1,"متر مکعب (m³)":1000,"گالن (gal)":3.78541}},
+  {id:"speed",label:"سرعت",base:"mps",units:{"متر بر ثانیه (m/s)":1,"کیلومتر بر ساعت (km/h)":0.277778,"مایل بر ساعت (mph)":0.44704}},
+  {id:"time",label:"زمان",base:"s",units:{"ثانیه (s)":1,"دقیقه (min)":60,"ساعت (h)":3600,"روز":86400}},
+  {id:"energy",label:"انرژی",base:"j",units:{"ژول (J)":1,"کیلوژول (kJ)":1000,"کالری (cal)":4.184,"کیلوکالری (kcal)":4184,"کیلووات‌ساعت (kWh)":3600000}},
+  {id:"temp",label:"دما",base:"c",units:{"سلسیوس (°C)":"c","فارنهایت (°F)":"f","کلوین (K)":"k"}}
+];
+let convCurrentCat="length";
+function buildUnitConverter(){
+  const cats=document.getElementById("convCats");
+  if(cats&&!cats.dataset.built){
+    cats.innerHTML=UNIT_CATEGORIES.map(c=>`<button type="button" class="conv-cat-btn${c.id===convCurrentCat?" active":""}" onclick="setConverterCategory('${c.id}')">${esc(c.label)}</button>`).join("");
+    cats.dataset.built="1";
+  }
+  populateConverterUnits();
+}
+window.setConverterCategory=function(id){
+  convCurrentCat=id;
+  document.querySelectorAll(".conv-cat-btn").forEach(b=>b.classList.remove("active"));
+  const btn=[...document.querySelectorAll(".conv-cat-btn")].find(b=>b.getAttribute("onclick").includes(`'${id}'`));
+  if(btn)btn.classList.add("active");
+  populateConverterUnits();
+};
+function populateConverterUnits(){
+  const cat=UNIT_CATEGORIES.find(c=>c.id===convCurrentCat);if(!cat)return;
+  const fromSel=document.getElementById("convFromUnit"),toSel=document.getElementById("convToUnit");
+  if(!fromSel||!toSel)return;
+  const opts=Object.keys(cat.units).map(u=>`<option value="${esc(u)}">${esc(u)}</option>`).join("");
+  fromSel.innerHTML=opts;toSel.innerHTML=opts;
+  const keys=Object.keys(cat.units);
+  if(keys.length>1)toSel.selectedIndex=1;
+  runConversion();
+}
+function convertTemp(val,from,to){
+  let c;
+  if(from==="سلسیوس (°C)")c=val;
+  else if(from==="فارنهایت (°F)")c=(val-32)*5/9;
+  else c=val-273.15;
+  if(to==="سلسیوس (°C)")return c;
+  if(to==="فارنهایت (°F)")return c*9/5+32;
+  return c+273.15;
+}
+window.runConversion=function(){
+  const cat=UNIT_CATEGORIES.find(c=>c.id===convCurrentCat);if(!cat)return;
+  const fromSel=document.getElementById("convFromUnit"),toSel=document.getElementById("convToUnit");
+  const fromInput=document.getElementById("convFrom"),toInput=document.getElementById("convTo");
+  if(!fromSel||!toSel||!fromInput||!toInput)return;
+  const val=Number(fromInput.value);
+  if(!Number.isFinite(val)){toInput.value="";return}
+  let result;
+  if(cat.id==="temp"){
+    result=convertTemp(val,fromSel.value,toSel.value);
+  }else{
+    const base=val*cat.units[fromSel.value];
+    result=base/cat.units[toSel.value];
+  }
+  toInput.value=String(Math.round(result*1e6)/1e6);
+};
+window.switchCalcSubtab=function(tab){
+  document.querySelectorAll(".calc-subtab").forEach(b=>b.classList.remove("active"));
+  document.querySelectorAll(".calc-panel").forEach(p=>p.classList.remove("active"));
+  document.getElementById(tab==="calc"?"calcSubtabCalc":"calcSubtabConv").classList.add("active");
+  document.getElementById(tab==="calc"?"calcPanelCalc":"calcPanelConv").classList.add("active");
 };
 
 /* ===================== SETTINGS ===================== */
@@ -4680,4 +5087,306 @@ if(_ps){
   if(typeof renderTasks === 'function') renderTasks();
 
   console.log('✅ Task edit patch applied');
+})();
+
+/* ===================== YPT-inspired additions (v-patch-2) =====================
+   1) Study heatmap (calendar-style)
+   2) Subject ranking / leaderboard
+   3) 10-minute daily planner
+   4) Pomodoro cycle mode + distraction-commitment for the focus timer
+================================================================================= */
+(function(){
+
+  /* ---------- shared state bootstrap ---------- */
+  if(!state.dailyPlans || typeof state.dailyPlans!=="object") state.dailyPlans={};
+  if(!state.pomodoroCycles || typeof state.pomodoroCycles!=="object") state.pomodoroCycles={};
+  if(!state.focusStats || typeof state.focusStats!=="object") state.focusStats={sessions:0,kept:0};
+  if(typeof state.settings.pomodoroMode!=="boolean") state.settings.pomodoroMode=false;
+
+  /* ===================== 1) STUDY HEATMAP ===================== */
+  function dayMinutesMap(){
+    const map={};
+    (state.episodes||[]).forEach(e=>{
+      const k=String(e.date||"").slice(0,10); if(!k) return;
+      map[k]=(map[k]||0)+(+e.minutes||0);
+    });
+    return map;
+  }
+  window.renderStudyHeatmap=function(){
+    const wrap=document.getElementById("studyHeatmap"); if(!wrap) return;
+    const WEEKS=18, DAYS=WEEKS*7;
+    const map=dayMinutesMap();
+    const now=new Date(); now.setHours(12,0,0,0);
+    const endDow=(now.getDay()+1)%7; // 0=Sat ... 6=Fri (Persian week)
+    const pad=6-endDow;
+    const totalCells=DAYS+pad;
+    const start=new Date(now); start.setDate(start.getDate()-(totalCells-1));
+    const cells=[];
+    for(let i=0;i<totalCells;i++){
+      const d=new Date(start); d.setDate(d.getDate()+i);
+      const key=d.toISOString().slice(0,10);
+      cells.push({date:d,key,minutes:map[key]||0,future:d>now});
+    }
+    const weeks=[];
+    for(let i=0;i<cells.length;i+=7) weeks.push(cells.slice(i,i+7));
+    const maxMinutes=Math.max(1,...cells.map(c=>c.minutes));
+    const levelOf=m=>{ if(!m) return 0; const r=m/maxMinutes; return r<.25?1:r<.5?2:r<.75?3:4; };
+    const dayNames=["ش","ی","د","س","چ","پ","ج"];
+    let grid=`<div class="heatmap-scroll"><div class="heatmap-grid">
+      <div class="heatmap-daylabels">${dayNames.map(n=>`<span>${n}</span>`).join("")}</div>
+      <div class="heatmap-weeks">`;
+    weeks.forEach(w=>{
+      grid+=`<div class="heatmap-week">`;
+      w.forEach(c=>{
+        if(c.future){grid+=`<span class="heatmap-cell future"></span>`;return;}
+        const tip=`${c.date.toLocaleDateString("fa-IR",{day:"numeric",month:"long"})} • ${c.minutes?fmt(c.minutes)+" دقیقه مطالعه":"بدون مطالعه"}`;
+        grid+=`<span class="heatmap-cell lvl${levelOf(c.minutes)}" title="${esc(tip)}"></span>`;
+      });
+      grid+=`</div>`;
+    });
+    grid+=`</div></div></div>`;
+    const activeDays=cells.filter(c=>!c.future&&c.minutes>0).length;
+    const validDays=cells.filter(c=>!c.future).length;
+    const totalMin=cells.reduce((a,c)=>a+c.minutes,0);
+    let curStreak=0;
+    for(let i=0;;i++){
+      const d=new Date(now); d.setDate(d.getDate()-i);
+      const k=d.toISOString().slice(0,10);
+      if((map[k]||0)>0) curStreak++; else break;
+      if(i>400) break;
+    }
+    wrap.innerHTML=`
+      <div class="heatmap-stats">
+        <div class="stat"><small class="label">روزهای فعال (${fmt(WEEKS)} هفته)</small><b>${fmt(activeDays)}/${fmt(validDays)}</b></div>
+        <div class="stat"><small class="label">مجموع دقیقه</small><b>${fmt(totalMin)}</b></div>
+        <div class="stat"><small class="label">زنجیره فعلی</small><b>${fmt(curStreak)} روز 🔥</b></div>
+      </div>
+      ${grid}
+      <div class="heatmap-legend"><span>کمتر</span>
+        <span class="heatmap-cell lvl0"></span><span class="heatmap-cell lvl1"></span>
+        <span class="heatmap-cell lvl2"></span><span class="heatmap-cell lvl3"></span>
+        <span class="heatmap-cell lvl4"></span><span>بیشتر</span>
+      </div>`;
+  };
+
+  /* ===================== 2) SUBJECT RANKING ===================== */
+  let rankingRange=30;
+  window.setRankingRange=function(v){
+    rankingRange=(v==="all")?"all":+v;
+    document.querySelectorAll(".ranking-range-btn").forEach(b=>b.classList.toggle("active",b.dataset.range===String(v)));
+    renderSubjectRanking();
+  };
+  function computeSubjectTotals(range){
+    const totals={};
+    let cutoffKey=null;
+    if(range!=="all"){
+      const d=new Date(); d.setDate(d.getDate()-(range-1)); d.setHours(0,0,0,0);
+      cutoffKey=d.toISOString().slice(0,10);
+    }
+    (state.episodes||[]).forEach(e=>{
+      const k=String(e.date||"").slice(0,10);
+      if(cutoffKey && k<cutoffKey) return;
+      if(!totals[e.subject]) totals[e.subject]={minutes:0,xp:0,episodes:0,tests:0,correct:0};
+      const t=totals[e.subject];
+      t.minutes+=(+e.minutes||0); t.xp+=(+e.xp||0); t.episodes++;
+      t.tests+=(+e.tests||0); t.correct+=(+e.correct||0);
+    });
+    return totals;
+  }
+  window.renderSubjectRanking=function(){
+    const el=document.getElementById("subjectRanking"); if(!el) return;
+    const totals=computeSubjectTotals(rankingRange);
+    const cur=state.settings.selectedCurriculum||"experimental";
+    const rows=Object.entries(totals).map(([k,t])=>({k,...t})).sort((a,b)=>b.minutes-a.minutes);
+    if(!rows.length){el.innerHTML='<div class="empty">هنوز داده‌ای برای این بازه ثبت نشده.</div>';return;}
+    const max=rows[0].minutes||1;
+    const medals=["🥇","🥈","🥉"];
+    el.innerHTML=rows.slice(0,12).map((r,i)=>{
+      const v=SUBJECTS[r.k]||{icon:"📘",name:r.k};
+      const name=subjectDisplayName(r.k,cur)||v.name;
+      const acc=r.tests?Math.round(r.correct/r.tests*100):null;
+      return `<div class="rank-row">
+        <span class="rank-medal">${medals[i]||(i+1)}</span>
+        <span class="rank-icon">${v.icon}</span>
+        <div class="rank-main">
+          <div class="rank-top"><b>${esc(name)}</b><span class="muted small">${fmt(r.minutes)} دقیقه</span></div>
+          <div class="progress"><div class="bar" style="width:${Math.max(2,Math.round(r.minutes/max*100))}%"></div></div>
+          <div class="muted small">${fmt(r.episodes)} پارت • ${fmt(r.xp)} XP${acc!==null?` • دقت ${acc}٪`:""}</div>
+        </div>
+      </div>`;
+    }).join("");
+  };
+
+  /* ===================== 3) DAILY 10-MINUTE PLANNER ===================== */
+  window.openDailyPlanner=function(){
+    const modal=document.getElementById("dailyPlanModal"); if(!modal) return;
+    buildDailyPlanForm();
+    modal.classList.add("show");
+  };
+  window.closeDailyPlanner=function(){
+    const m=document.getElementById("dailyPlanModal"); if(m) m.classList.remove("show");
+  };
+  function buildDailyPlanForm(){
+    const list=document.getElementById("dailyPlanSubjects"); if(!list) return;
+    const keys=(typeof getSmartSubjects==="function")?getSmartSubjects():[];
+    const scored=keys.map(k=>({k,score:(typeof smartSubjectScore==="function")?smartSubjectScore(k):0}))
+      .sort((a,b)=>b.score-a.score);
+    const existing=state.dailyPlans[today()];
+    const chosen=existing?existing.subjects:scored.slice(0,3).map(x=>x.k);
+    if(!scored.length){
+      list.innerHTML='<div class="empty">ابتدا رشته و پایه تحصیلی را در داشبورد انتخاب کن.</div>';
+    }else{
+      list.innerHTML=scored.slice(0,12).map(({k})=>{
+        const v=SUBJECTS[k]||{icon:"📘",name:k};
+        const name=subjectDisplayName(k,state.settings.selectedCurriculum);
+        const checked=chosen.includes(k)?"checked":"";
+        return `<label class="plan-subject-chip"><input type="checkbox" value="${k}" ${checked} onchange="limitPlanSubjects(this)"> ${v.icon} ${esc(name)}</label>`;
+      }).join("");
+    }
+    const tgt=document.getElementById("dailyPlanTarget");
+    if(tgt) tgt.value=existing?existing.targetEpisodes:(state.settings.targetEpisodes||7);
+    const moodInfo=document.getElementById("dailyPlanMood");
+    if(moodInfo) moodInfo.textContent=`${state.settings.moodEmoji||"📚"} ${state.settings.moodLabel||"مطالعه‌گر"}`;
+  }
+  window.limitPlanSubjects=function(el){
+    const boxes=[...document.querySelectorAll("#dailyPlanSubjects input[type=checkbox]")];
+    const checked=boxes.filter(b=>b.checked);
+    if(checked.length>3){ el.checked=false; showToast("حداکثر ۳ درس برای امروز انتخاب کن."); }
+  };
+  window.saveDailyPlan=function(){
+    const boxes=[...document.querySelectorAll("#dailyPlanSubjects input[type=checkbox]:checked")];
+    const subjects=boxes.map(b=>b.value);
+    if(!subjects.length){ showToast("حداقل یک درس برای امروز انتخاب کن."); return; }
+    const targetEpisodes=Math.max(1,Math.round(+document.getElementById("dailyPlanTarget").value||state.settings.targetEpisodes||7));
+    state.dailyPlans[today()]={subjects,targetEpisodes,mood:{emoji:state.settings.moodEmoji,label:state.settings.moodLabel},createdAt:Date.now()};
+    save(); closeDailyPlanner(); renderDailyPlanCard();
+    showToast("برنامه امروز ذخیره شد. بزن بریم! 🚀");
+  };
+  window.renderDailyPlanCard=function(){
+    const el=document.getElementById("dailyPlanCard"); if(!el) return;
+    const plan=state.dailyPlans[today()];
+    if(!plan){
+      el.innerHTML=`<div class="empty">هنوز برای امروز برنامه نریختی.</div>
+        <button class="btn primary" style="margin-top:8px;width:100%" onclick="openDailyPlanner()">📝 شروع برنامه‌ریزی ۱۰دقیقه‌ای</button>`;
+      return;
+    }
+    const cur=state.settings.selectedCurriculum;
+    const done=dayEpisodes();
+    const rows=plan.subjects.map(k=>{
+      const v=SUBJECTS[k]||{icon:"📘",name:k};
+      const count=done.filter(e=>e.subject===k).length;
+      return `<div class="quest"><span>${count>0?"✅":"⭕"} ${v.icon} ${esc(subjectDisplayName(k,cur))}</span><b>${fmt(count)} پارت</b></div>`;
+    }).join("");
+    const totalDone=done.length;
+    const pct=Math.min(100,Math.round(totalDone/(plan.targetEpisodes||1)*100));
+    el.innerHTML=`<div class="muted small" style="margin-bottom:8px">${plan.mood?.emoji||""} حال‌وهوای هنگام برنامه‌ریزی: ${esc(plan.mood?.label||"—")}</div>
+      <div class="list">${rows}</div>
+      <div class="xpmeta" style="margin-top:9px"><span>ظرفیت امروز</span><span>${fmt(totalDone)} / ${fmt(plan.targetEpisodes)}</span></div>
+      <div class="progress"><div class="bar" style="width:${pct}%"></div></div>`;
+  };
+
+  /* ===================== 4) POMODORO CYCLE + FOCUS COMMITMENT ===================== */
+  let breakTimerInterval=null, breakSecondsLeft=0;
+  function updateBreakDisplay(){
+    const m=String(Math.floor(breakSecondsLeft/60)).padStart(2,"0");
+    const s=String(breakSecondsLeft%60).padStart(2,"0");
+    const el=document.getElementById("pomodoroBreakTime"); if(el) el.textContent=m+":"+s;
+  }
+  function startPomodoroBreak(minutes){
+    const dur=Math.max(1,Math.min(60,Math.round(minutes)||10));
+    breakSecondsLeft=dur*60;
+    const box=document.getElementById("pomodoroBreakBox"); if(box) box.style.display="flex";
+    updateBreakDisplay();
+    clearInterval(breakTimerInterval);
+    breakTimerInterval=setInterval(()=>{
+      breakSecondsLeft--;
+      if(breakSecondsLeft<=0){
+        clearInterval(breakTimerInterval); breakTimerInterval=null;
+        const box2=document.getElementById("pomodoroBreakBox"); if(box2) box2.style.display="none";
+        showToast("استراحت تمام شد! دور بعدی پومودورو آماده می‌شود ⏱");
+        resumeNextPomodoroCycle();
+        return;
+      }
+      updateBreakDisplay();
+    },1000);
+  }
+  function resumeNextPomodoroCycle(){
+    const lastMin=Math.max(1,Math.round((studyTimerTotal||1500)/60));
+    setStudyTimerCustom(lastMin);
+    setTimeout(()=>{ if(!studyTimerRunning) toggleStudyTimer(); },300);
+  }
+  window.skipPomodoroBreak=function(){
+    clearInterval(breakTimerInterval); breakTimerInterval=null;
+    const box=document.getElementById("pomodoroBreakBox"); if(box) box.style.display="none";
+    resumeNextPomodoroCycle();
+  };
+  window.togglePomodoroMode=function(el){
+    state.settings.pomodoroMode=!!el.checked; save();
+    if(!el.checked){ clearInterval(breakTimerInterval); breakTimerInterval=null; const box=document.getElementById("pomodoroBreakBox"); if(box) box.style.display="none"; }
+  };
+  window.toggleCommitChip=function(el){ el.classList.toggle("active"); };
+
+  window.renderPomodoroStatus=function(){
+    const c=state.pomodoroCycles[today()]||0;
+    const cEl=document.getElementById("pomodoroCyclesToday"); if(cEl) cEl.textContent=fmt(c);
+    const fs=state.focusStats||{sessions:0,kept:0};
+    const rEl=document.getElementById("focusCommitRate");
+    if(rEl) rEl.textContent=fs.sessions?Math.round(fs.kept/fs.sessions*100)+"٪":"—";
+    const toggle=document.getElementById("pomodoroModeToggle");
+    if(toggle) toggle.checked=!!state.settings.pomodoroMode;
+  };
+
+  // Wrap the existing timer-session logger to add commitment tracking + pomodoro auto-cycling,
+  // without touching the original study/episode logging logic.
+  const _origLogCurrentTimerSession=logCurrentTimerSession;
+  logCurrentTimerSession=function(autoFinish){
+    const commitChips=[...document.querySelectorAll("#commitChips .commit-chip.active,.commit-chips .commit-chip.active")].map(c=>c.dataset.item);
+    const wasPomodoro=!!state.settings.pomodoroMode;
+    const ok=_origLogCurrentTimerSession(autoFinish);
+    if(ok){
+      state.focusStats.sessions++;
+      if(commitChips.length){
+        const kept=confirm(`آیا در این جلسه به تعهدت پایبند موندی؟\n(${commitChips.join("، ")})`);
+        if(kept){ state.focusStats.kept++; state.gold+=3; showToast("👏 به تعهدت پایبند موندی! +۳ سکه پاداش انضباط"); }
+      }
+      if(wasPomodoro){
+        const dk=today();
+        state.pomodoroCycles[dk]=(state.pomodoroCycles[dk]||0)+1;
+      }
+      save();
+      renderPomodoroStatus();
+      if(wasPomodoro){ startPomodoroBreak(+state.settings.breakMinutes||10); }
+    }
+    return ok;
+  };
+  window.logCurrentTimerSession=logCurrentTimerSession;
+
+  /* ---------- wire everything into the main render loop ---------- */
+  const _origRender=render;
+  render=function(){
+    _origRender();
+    if(isPageActive("dashboard")){
+      renderStudyHeatmap();
+      renderSubjectRanking();
+      renderDailyPlanCard();
+    }
+    if(isPageActive("skillHub")) renderPomodoroStatus();
+  };
+  window.render=render;
+
+  const _origSwitchToPage=window.switchToPage;
+  window.switchToPage=function(name){
+    _origSwitchToPage(name);
+    if(name==="dashboard"){ renderStudyHeatmap(); renderSubjectRanking(); renderDailyPlanCard(); }
+    if(name==="skillHub") renderPomodoroStatus();
+  };
+
+  // Initial paint (dashboard is the active page on load)
+  renderStudyHeatmap();
+  renderSubjectRanking();
+  renderDailyPlanCard();
+  renderPomodoroStatus();
+
+  save();
+  console.log("✅ YPT-inspired patch applied (heatmap, ranking, daily planner, pomodoro)");
 })();

@@ -88,6 +88,13 @@
     <h3>⏳ روزشمار کنکور</h3>
     <div id="examCountdownBody"></div>
   </div>
+  <div class="card span-4" id="dailyPlanCardWrap">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+      <h3 style="margin:0">📝 برنامه امروز</h3>
+      <button class="btn" onclick="openDailyPlanner()" title="ویرایش برنامه ۱۰دقیقه‌ای">⚙</button>
+    </div>
+    <div id="dailyPlanCard"></div>
+  </div>
   <div class="card span-8">
     <h3>📊 پیشرفت امروز</h3>
     <div class="statgrid" style="margin-top:10px">
@@ -192,6 +199,22 @@
       </div>
     </div>
     <div id="progressChart"></div>
+  </div>
+  <div class="card span-8" id="heatmapCard">
+    <h3>🗓️ نقشه حرارتی مطالعه</h3>
+    <p class="muted small">هر خونه یک روزه؛ هرچی رنگش تیره‌تر، اون روز بیشتر خوندی.</p>
+    <div id="studyHeatmap"></div>
+  </div>
+  <div class="card span-4" id="rankingCard">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+      <h3 style="margin:0">🏆 رتبه‌بندی دروس</h3>
+      <div class="ranking-range-tabs">
+        <button class="btn ranking-range-btn" data-range="7" onclick="setRankingRange(7)">۷ روز</button>
+        <button class="btn ranking-range-btn active" data-range="30" onclick="setRankingRange(30)">۳۰ روز</button>
+        <button class="btn ranking-range-btn" data-range="all" onclick="setRankingRange('all')">همه</button>
+      </div>
+    </div>
+    <div id="subjectRanking" style="margin-top:10px"></div>
   </div>
 </div>
 </section>
@@ -433,6 +456,10 @@
       <button class="toolbox-tab active" onclick="switchToolboxTab('leitner')">🧠 لایتنر</button>
       <button class="toolbox-tab" onclick="switchToolboxTab('timer')">⏱ تایمر</button>
       <button class="toolbox-tab" onclick="switchToolboxTab('periodic')">⚗️ جدول تناوبی</button>
+      <button class="toolbox-tab" onclick="switchToolboxTab('noise')">🎧 نویز سفید</button>
+      <button class="toolbox-tab" onclick="switchToolboxTab('notes')">📝 یادداشت</button>
+      <button class="toolbox-tab" onclick="switchToolboxTab('formulas')">📐 فرمول‌نامه</button>
+      <button class="toolbox-tab" onclick="switchToolboxTab('calc')">🧮 ماشین‌حساب</button>
     </div>
     <div id="toolLeitner" class="tool-panel active">
       <div class="leitner-shell">
@@ -528,6 +555,36 @@
             <button class="btn" id="studyTimerLogBtn" onclick="logCurrentTimerSession()" style="width:100%;margin-top:12px">📝 ثبت دستی زمان سپری‌شده</button>
           </section>
         </div>
+
+        <div class="timer-v2-pomodoro card">
+          <div class="pomodoro-head">
+            <div>
+              <h3>🍅 حالت چرخه پومودورو</h3>
+              <p class="muted small">فعالش کن تا بعد از هر جلسه فوکوس، استراحت خودکار شروع بشه و دور بعدی خودش آماده بشه.</p>
+            </div>
+            <label class="pomodoro-switch">
+              <input type="checkbox" id="pomodoroModeToggle" onchange="togglePomodoroMode(this)">
+              <span>فعال</span>
+            </label>
+          </div>
+          <div class="pomodoro-stats">
+            <div class="stat"><small class="label">دورهای امروز</small><b id="pomodoroCyclesToday">۰</b></div>
+            <div class="stat"><small class="label">پایبندی به تعهد</small><b id="focusCommitRate">—</b></div>
+          </div>
+          <div class="commit-title">📵 قبل از شروع، به این‌ها دست نمی‌زنم:</div>
+          <div class="commit-chips" id="commitChips">
+            <button type="button" class="commit-chip" data-item="موبایل" onclick="toggleCommitChip(this)">📱 موبایل</button>
+            <button type="button" class="commit-chip" data-item="شبکه اجتماعی" onclick="toggleCommitChip(this)">📡 شبکه اجتماعی</button>
+            <button type="button" class="commit-chip" data-item="بازی" onclick="toggleCommitChip(this)">🎮 بازی</button>
+            <button type="button" class="commit-chip" data-item="یوتیوب" onclick="toggleCommitChip(this)">▶️ یوتیوب</button>
+            <button type="button" class="commit-chip" data-item="پیام‌رسان" onclick="toggleCommitChip(this)">💬 پیام‌رسان</button>
+          </div>
+          <div class="pomodoro-break-box" id="pomodoroBreakBox" style="display:none">
+            <span>☕ در حال استراحت...</span>
+            <b id="pomodoroBreakTime">10:00</b>
+            <button class="btn" type="button" onclick="skipPomodoroBreak()">رد کردن استراحت ▶</button>
+          </div>
+        </div>
       </div>
     </div>
     <div id="toolPeriodic" class="tool-panel">
@@ -553,6 +610,88 @@
         <div class="pt-legend-item"><span class="pt-legend-dot" style="background:#636e72"></span> نامعلوم</div>
       </div>
       <div id="ptDetail" class="pt-detail"></div>
+    </div>
+
+    <div id="toolNoise" class="tool-panel">
+      <div class="skill-v7-eyebrow">FOCUS SOUND</div>
+      <h2>🎧 نویز سفید / صدای تمرکز</h2>
+      <p class="muted" style="margin:4px 0 14px">یک صدای پس‌زمینه ثابت پخش کن تا حواس‌پرتی و صداهای اطراف کمتر حس بشه. کاملاً آفلاین و بدون فایل صوتی تولید می‌شه.</p>
+      <div class="noise-types" id="noiseTypes"></div>
+      <div class="noise-player">
+        <button class="btn primary noise-toggle" id="noiseToggleBtn" onclick="toggleNoisePlayback()">▶ پخش</button>
+        <div class="noise-volume">
+          <label>حجم صدا</label>
+          <input id="noiseVolume" type="range" min="0" max="100" value="55" oninput="setNoiseVolume(this.value)">
+        </div>
+        <div class="field-mini">
+          <label>توقف خودکار</label>
+          <select id="noiseAutoStop" onchange="setNoiseAutoStop(this.value)">
+            <option value="0">بدون توقف خودکار</option>
+            <option value="15">۱۵ دقیقه</option>
+            <option value="25">۲۵ دقیقه</option>
+            <option value="45">۴۵ دقیقه</option>
+            <option value="60">۶۰ دقیقه</option>
+          </select>
+        </div>
+      </div>
+      <div class="muted small" id="noiseStatus" style="margin-top:10px">در حال حاضر متوقف است.</div>
+    </div>
+
+    <div id="toolNotes" class="tool-panel">
+      <div class="skill-v7-eyebrow">QUICK NOTES</div>
+      <h2>📝 یادداشت سریع</h2>
+      <p class="muted" style="margin:4px 0 14px">نکته‌ای که حین مطالعه به ذهنت رسید رو همین‌جا سریع ثبت کن، بدون این‌که از صفحه بیرون بری.</p>
+      <div class="note-add">
+        <textarea id="quickNoteText" maxlength="500" placeholder="نکته، فرمول، یا یادآوری خودت رو بنویس..."></textarea>
+        <div class="note-add-row">
+          <select id="quickNoteSubject"><option value="">— بدون دسته —</option></select>
+          <button class="btn primary" onclick="addQuickNote()">➕ افزودن یادداشت</button>
+        </div>
+      </div>
+      <div id="quickNotesList" class="notes-list"></div>
+    </div>
+
+    <div id="toolFormulas" class="tool-panel">
+      <div class="skill-v7-eyebrow">FORMULA SHEET</div>
+      <h2>📐 فرمول‌نامه</h2>
+      <p class="muted" style="margin:4px 0 14px">فرمول‌های پرکاربرد ریاضی، فیزیک و شیمی، یک‌جا و قابل‌جست‌وجو.</p>
+      <input id="formulaSearch" type="text" placeholder="جست‌وجو در فرمول‌ها... مثلاً «مشتق» یا «مول»" oninput="renderFormulaSheet(this.value)">
+      <div id="formulaSheetList" class="formula-list"></div>
+    </div>
+
+    <div id="toolCalc" class="tool-panel">
+      <div class="skill-v7-eyebrow">CALCULATOR</div>
+      <h2>🧮 ماشین‌حساب علمی + مبدل واحد</h2>
+      <div class="calc-subtabs">
+        <button class="calc-subtab active" id="calcSubtabCalc" onclick="switchCalcSubtab('calc')">ماشین‌حساب</button>
+        <button class="calc-subtab" id="calcSubtabConv" onclick="switchCalcSubtab('conv')">مبدل واحد</button>
+      </div>
+
+      <div id="calcPanelCalc" class="calc-panel active">
+        <input id="calcExpr" class="calc-screen" type="text" inputmode="none" readonly value="0">
+        <div class="calc-meta">
+          <button class="calc-deg-btn active" id="calcDegBtn" onclick="setCalcAngleMode('deg')">DEG</button>
+          <button class="calc-deg-btn" id="calcRadBtn" onclick="setCalcAngleMode('rad')">RAD</button>
+        </div>
+        <div class="calc-grid" id="calcGrid"></div>
+      </div>
+
+      <div id="calcPanelConv" class="calc-panel">
+        <div class="conv-cats" id="convCats"></div>
+        <div class="conv-row">
+          <div class="field-mini">
+            <label>مقدار</label>
+            <input id="convFrom" type="number" value="1" inputmode="decimal" oninput="runConversion()">
+          </div>
+          <select id="convFromUnit" onchange="runConversion()"></select>
+          <span class="conv-arrow">=</span>
+          <div class="field-mini">
+            <label>نتیجه</label>
+            <input id="convTo" type="text" readonly value="">
+          </div>
+          <select id="convToUnit" onchange="runConversion()"></select>
+        </div>
+      </div>
     </div>
   </div>
 </section>
@@ -902,6 +1041,29 @@
     <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px">
       <button class="btn" type="button" onclick="resetMoods()">↺ بازنشانی به پیش‌فرض</button>
       <button class="btn primary" type="button" onclick="closeMoodPicker()">تمام</button>
+    </div>
+  </div>
+</div>
+
+<div id="dailyPlanModal" class="modal">
+  <div class="modalbox card" style="max-width:560px;width:min(96vw,560px)">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:10px">
+      <div>
+        <h2>📝 برنامه‌ریز ۱۰دقیقه‌ای</h2>
+        <p class="muted" style="margin:4px 0 0">فقط چند تا انتخاب سریع؛ همین کافیه تا امروزت مسیر داشته باشه.</p>
+      </div>
+      <button class="btn" type="button" onclick="closeDailyPlanner()">✕</button>
+    </div>
+    <div class="muted small" style="margin-bottom:10px">حال‌وهوای فعلی: <b id="dailyPlanMood">—</b> <span style="margin-right:6px">— برای تغییرش از دکمه بالای صفحه استفاده کن.</span></div>
+    <label style="margin-top:4px">اولویت‌های امروز (حداکثر ۳ درس)</label>
+    <div class="plan-subject-list" id="dailyPlanSubjects"></div>
+    <div style="margin-top:12px">
+      <label for="dailyPlanTarget">ظرفیت پیشنهادی امروز (تعداد پارت مطالعه)</label>
+      <input id="dailyPlanTarget" type="number" min="1" max="20" value="7">
+    </div>
+    <div class="actions" style="margin-top:14px">
+      <button class="btn primary" type="button" onclick="saveDailyPlan()">💾 ذخیره برنامه امروز</button>
+      <button class="btn" type="button" onclick="closeDailyPlanner()">انصراف</button>
     </div>
   </div>
 </div>
